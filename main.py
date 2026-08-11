@@ -1,10 +1,11 @@
 """
-main.py — Entry point.  Runs the webhook server and Discord bot concurrently.
+main.py — Entry point. Runs the webhook server and Discord bot concurrently.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 
 import uvicorn
@@ -21,7 +22,6 @@ from scheduler import Scheduler
 logging.basicConfig(level=logging.INFO, format="%(levelname)-5s %(name)-14s %(message)s")
 logger = logging.getLogger("main")
 
-
 async def run() -> None:
     validate_config()
     mode_label = "PAPER (fake money)" if TRADING_MODE == "paper" else "LIVE"
@@ -36,9 +36,12 @@ async def run() -> None:
     discord_bot = DiscordBot(db=db, broker=broker)
 
     app = create_app(db=db, broker=broker, discord_bot=discord_bot)
-    server_config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+
+    # Railway injects $PORT; fall back to 8000 for local dev
+    port = int(os.environ.get("PORT", 8000))
+    server_config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(server_config)
-    logger.info("Webhook listening on port 8000 at POST /webhook")
+    logger.info(f"Webhook listening on port {port} at POST /webhook")
 
     sched_obj = Scheduler(db=db, broker=broker, discord_bot=discord_bot)
     aps = AsyncIOScheduler(timezone="America/New_York")
@@ -54,7 +57,6 @@ async def run() -> None:
     finally:
         aps.shutdown(wait=False)
         await discord_bot.close()
-
 
 if __name__ == "__main__":
     try:
